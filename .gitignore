@@ -128,5 +128,11 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Data
-datasets/
+# vs code stuff
+.vscode/
+
+# downloaded datasets
+raw_data/
+
+# weights and biases stuff
+wandb/
