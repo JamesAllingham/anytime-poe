@@ -32,7 +32,7 @@ def get_locs_scales_probs(
     elif obj.noise == 'homo-per-ens':
         scales = jnp.exp(obj.logscale)  # (M, O)
     else:
-        scales = jnp.exp(obj.logscale)[jnp.newaxis, :]  # (M, O)
+        scales = jnp.repeat(jnp.exp(obj.logscale)[jnp.newaxis, :], M, axis=0)  # (M, O)
 
     probs = nn.softmax(obj.weights)[:, jnp.newaxis]
 

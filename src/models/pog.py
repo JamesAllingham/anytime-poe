@@ -48,7 +48,7 @@ class PoG_Ens(nn.Module):
         locs, scales, probs = get_locs_scales_probs(self, x, train)
 
         def product_logprob(y):
-            return jnp.sum(probs * jax.vmap(gnd_ll, in_axes=(None, 0, None, None))(y, locs, scales, β))
+            return jnp.sum(probs * jax.vmap(gnd_ll, in_axes=(None, 0, 0, None))(y, locs, scales, β))
 
         dy = 0.001
         ys = jnp.arange(-10, 10 + dy, dy)
@@ -90,8 +90,8 @@ def make_PoG_Ens_loss(
     model: PoG_Ens,
     x_batch: Array,
     y_batch: Array,
-    train: bool = True,
     β: int,
+    train: bool = True,
     # ^ controls how much our GND looks like a Guassian (β=2) or Uniform (β->inf)
     # should be taken from 2 to ??? duringn the process of training
 ) -> Callable:
