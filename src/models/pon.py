@@ -7,7 +7,7 @@ from flax.linen import initializers
 from chex import Array
 import distrax
 
-from src.models.common import raise_if_not_in_list, NOISE_TYPES
+from src.models.common import raise_if_not_in_list, NOISE_TYPES, get_locs_scales_probs
 
 
 class PoN_Ens(nn.Module):
@@ -41,22 +41,7 @@ class PoN_Ens(nn.Module):
         train: bool = False,
         return_ens_preds = False,
     ) -> Array:
-        ens_preds = jnp.stack([net(x, train=train) for net in self.nets], axis=0)  # (M, O * 2)
-        M, _ = ens_preds.shape
-        ens_preds = ens_preds.reshape(M, -1, 2)  # (M, O, 2)
-
-        locs = ens_preds[:, :, 0]  # (M, O)
-
-        if self.noise == 'hetero':
-            log_scales = ens_preds[:, :, 0]  # (M, O)
-            scales = jnp.exp(log_scales)
-        elif self.noise == 'homo-per-ens':
-            scales = jnp.exp(self.logscale)  # (M, O)
-        else:
-            scales = jnp.exp(self.logscale)[jnp.newaxis, :]  # (M, O)
-
-        weights = self.weights if self.learn_weights else jax.lax.stop_gradient(self.weights)
-        probs = nn.softmax(weights)[:, jnp.newaxis]
+        locs, scales, probs = get_locs_scales_probs(self, x, train)
 
         loc, scale = normal_prod(locs, scales, probs)
 
