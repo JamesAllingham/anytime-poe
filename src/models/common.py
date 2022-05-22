@@ -34,7 +34,6 @@ def get_locs_scales_probs(
     else:
         scales = jnp.exp(obj.logscale)[jnp.newaxis, :]  # (M, O)
 
-    weights = obj.weights if obj.learn_weights else jax.lax.stop_gradient(obj.weights)
-    probs = nn.softmax(weights)[:, jnp.newaxis]
+    probs = nn.softmax(obj.weights)[:, jnp.newaxis]
 
     return locs, scales, probs

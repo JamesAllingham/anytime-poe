@@ -23,11 +23,12 @@ class Reg_Ens(nn.Module):
         raise_if_not_in_list(self.noise, NOISE_TYPES, 'self.noise')
 
         self.nets = [self.make_net() for _ in range(self.size)]
-        self.weights = self.param(
+        weights = self.param(
             'weights',
             self.weights_init,
             (self.size,)
         )
+        self.weights = weights if self.learn_weights else jax.lax.stop_gradient(weights)
         if self.noise != 'hetero':
             self.logscale = self.param(
                 'logscale',
