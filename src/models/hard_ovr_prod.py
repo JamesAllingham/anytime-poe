@@ -5,10 +5,14 @@ import jax.numpy as jnp
 import flax.linen as nn
 from flax.linen import initializers
 from chex import Array
-import distrax
 
 
-class Cls_Ens(nn.Module):
+def hardened_ovr_ll(y_1hot, logits, T):
+    σ = nn.sigmoid(T * logits)
+    return jnp.sum(y_1hot * jnp.log(σ) + (1 - y_1hot) * jnp.log(1 - σ), axis=0)
+
+
+class Hard_OvR_Ens(nn.Module):
     """A standard classification ensemble."""
     size: int
     make_net: Callable[[], nn.Module]
@@ -30,17 +34,23 @@ class Cls_Ens(nn.Module):
         x: Array,
         y: int,
         train: bool = False,
+        T: int = 1,
     ) -> Array:
-        ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)  # (M, O)
+        ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)
         probs = nn.softmax(self.weights, axis=0)[:, jnp.newaxis]  # (M, 1)
 
-        def nll(y, logits):
-            return  -1 * distrax.Categorical(logits).log_prob(y)
+        n_classes = self.nets[0].out_size
 
-        nlls = jax.vmap(nll, in_axes=(None, 0))(y, ens_logits)
-        loss = (nlls * probs).sum(axis=0)
+        def product_logprob(y):
+            y_1hot = jax.nn.one_hot(y, n_classes)
+            return jnp.sum(probs * jax.vmap(hardened_ovr_ll, in_axes=(None, 0, None))(y_1hot, ens_logits, T))
 
-        return loss
+        ys = jnp.arange(1, n_classes + 1)
+        Z = jnp.sum(jnp.exp(jax.vmap(product_logprob)(ys), axis=0))
+
+        nll = -(product_logprob(y) - jnp.log(Z + 1e-36))
+
+        return nll
 
     def pred(
         self,
@@ -49,29 +59,29 @@ class Cls_Ens(nn.Module):
         return_ens_preds = False,
     ) -> Array:
         ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)  # (M, O)
-        probs = nn.softmax(self.weights, axis=0)[:, jnp.newaxis]  # (M, 1)
+        ens_preds = jnp.round(nn.sigmoid(ens_logits))
 
-        logits = (probs * ens_logits).sum(axis=0)  # (O,)
-        preds = nn.softmax(logits)
+        preds = ens_preds.prod(axis=0)
 
         if return_ens_preds:
-            return preds, nn.softmax(ens_logits, axis=-1)
+            return preds, ens_preds
         else:
             return preds
 
 
-def make_Cls_Ens_loss(
-    model: Cls_Ens,
+def make_Hard_OvR_Ens_loss(
+    model: Hard_OvR_Ens,
     x_batch: Array,
     y_batch: Array,
+    T: int,
     train: bool = True,
 ) -> Callable:
-    """Creates a loss function for training a std Ens."""
+    """Creates a loss function for training a Hard One-vs-Rest Ens."""
     def batch_loss(params, state):
         # define loss func for 1 example
         def loss_fn(params, x, y):
             loss, new_state = model.apply(
-                {"params": params, **state}, x, train=train,
+                {"params": params, **state}, x, y, train=train, T=T,
                 mutable=list(state.keys()) if train else {},
             )
 
