@@ -56,9 +56,9 @@ class PoG_Ens(nn.Module):
 
         nll = -(product_logprob(y) - jnp.log(Z + 1e-36))
 
-        return nll, Z, product_logprob(y)
+        return nll
 
-    def uniform_pred(
+    def pred(
         self,
         x: Array,
         train: bool = False,
@@ -89,26 +89,26 @@ def make_PoG_Ens_loss(
     model: PoG_Ens,
     x_batch: Array,
     y_batch: Array,
+    train: bool = True,
     β: int,
     # ^ controls how much our GND looks like a Guassian (β=2) or Uniform (β->inf)
     # should be taken from 2 to ??? duringn the process of training
-    train: bool = True,
 ) -> Callable:
     """Creates a loss function for training a PoE DUN."""
     def batch_loss(params, state):
         # define loss func for 1 example
         def loss_fn(params, x, y):
-            (nll, Z, log_prob), new_state = model.apply(
+            nll, new_state = model.apply(
                 {"params": params, **state}, x, y, train=train, β=β,
                 mutable=list(state.keys()) if train else {},
             )
 
-            return nll, Z, log_prob, new_state
+            return nll, new_state
 
         # broadcast over batch and take mean
-        loss_for_batch, Z, log_prob, new_state = jax.vmap(
-            loss_fn, out_axes=(0, 0, 0, None), in_axes=(None, 0, 0), axis_name="batch"
+        loss_for_batch, new_state = jax.vmap(
+            loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
-        return loss_for_batch.mean(), (Z, log_prob, new_state)
+        return loss_for_batch.mean(), new_state
 
     return batch_loss

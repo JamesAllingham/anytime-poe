@@ -38,6 +38,20 @@ class PoN_Ens(nn.Module):
     def __call__(
         self,
         x: Array,
+        y: int,
+        train: bool = False,
+    ) -> Array:
+        locs, scales, probs = get_locs_scales_probs(self, x, train)
+
+        loc, scale = normal_prod(locs, scales, probs)
+
+        nll = -distrax.Normal(loc, scale).log_prob(y)
+
+        return nll
+
+    def pred(
+        self,
+        x: Array,
         train: bool = False,
         return_ens_preds = False,
     ) -> Array:
@@ -61,22 +75,18 @@ def make_PoN_Ens_loss(
     def batch_loss(params, state):
         # define loss func for 1 example
         def loss_fn(params, x, y):
-            (loc, scale), new_state = model.apply(
-                {"params": params, **state}, x, train=train,
+            nll, new_state = model.apply(
+                {"params": params, **state}, x, y, train=train,
                 mutable=list(state.keys()) if train else {},
             )
 
-            nll = -1 * distrax.Normal(loc, scale).log_prob(y)
-
-            sq_err = (loc - y)**2
-
-            return nll[0], sq_err[0], new_state
+            return nll, new_state
 
         # broadcast over batch and take mean
-        loss_for_batch, errors_for_batch, new_state = jax.vmap(
-            loss_fn, out_axes=(0, 0, None), in_axes=(None, 0, 0), axis_name="batch"
+        loss_for_batch, new_state = jax.vmap(
+            loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
-        return loss_for_batch.mean(axis=0), (errors_for_batch.mean(axis=0), new_state)
+        return loss_for_batch.mean(axis=0), new_state
 
     return batch_loss
 
