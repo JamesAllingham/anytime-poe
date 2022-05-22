@@ -18,21 +18,45 @@ class Cls_Ens(nn.Module):
 
     def setup(self):
         self.nets = [self.make_net() for _ in range(self.size)]
-        self.weights = self.param(
+        weights = self.param(
             'weights',
             self.weights_init,
             (self.size,)
         )
+        self.weights = weights if self.learn_weights else jax.lax.stop_gradient(weights)
 
     def __call__(
         self,
         x: Array,
+        y: int,
         train: bool = False,
     ) -> Array:
-        logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)
+        ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)  # (M, O)
         probs = nn.softmax(self.weights, axis=0)[:, jnp.newaxis]  # (M, 1)
 
-        return logits, probs
+        def nll(y, logits):
+            return  -1 * distrax.Categorical(logits).log_prob(y)
+
+        nlls = jax.vmap(nll, in_axes=(None, 0))(y, ens_logits)
+        loss = (nlls * probs).sum(axis=0)
+
+        return loss
+
+    def pred(
+        self,
+        x: Array,
+        train: bool = False,
+        return_ens_preds = False,
+    ) -> Array:
+        ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)  # (M, O)
+        probs = nn.softmax(self.weights, axis=0)[:, jnp.newaxis]  # (M, 1)
+
+        logits = (probs * ens_logits).sum(axis=0)  # (O,)
+
+        if return_ens_preds:
+            return logits, ens_logits
+        else:
+            return logits
 
 
 def make_Cls_Ens_loss(
@@ -45,25 +69,17 @@ def make_Cls_Ens_loss(
     def batch_loss(params, state):
         # define loss func for 1 example
         def loss_fn(params, x, y):
-            (ens_logits, probs), new_state = model.apply(
+            loss, new_state = model.apply(
                 {"params": params, **state}, x, train=train,
                 mutable=list(state.keys()) if train else {},
             )
 
-            def nll(y, logits):
-                return  -1 * distrax.Categorical(logits).log_prob(y)
-
-            nlls = jax.vmap(nll, in_axes=(None, 0))(y, ens_logits)
-            loss = (nlls * probs).sum(axis=0)
-
-            error = jnp.argmax((ens_logits * probs).sum(axis=0)) != y
-
-            return loss, error, new_state
+            return loss, new_state
 
         # broadcast over batch and take mean
-        loss_for_batch, errors_for_batch, new_state = jax.vmap(
-            loss_fn, out_axes=(0, 0, None), in_axes=(None, 0, 0), axis_name="batch"
+        loss_for_batch, new_state = jax.vmap(
+            loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
-        return loss_for_batch.mean(axis=0), (errors_for_batch.mean(axis=0), new_state)
+        return loss_for_batch.mean(axis=0), new_state
 
     return batch_loss

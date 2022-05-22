@@ -79,12 +79,12 @@ def make_Reg_Ens_loss(
     def batch_loss(params, state):
         # define loss func for 1 example
         def loss_fn(params, x, y):
-            nll, new_state = model.apply(
+            loss, new_state = model.apply(
                 {"params": params, **state}, x, y, train=train,
                 mutable=list(state.keys()) if train else {},
             )
 
-            return nll, new_state
+            return loss, new_state
 
         # broadcast over batch and take mean
         loss_for_batch, new_state = jax.vmap(
