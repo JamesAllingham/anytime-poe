@@ -20,7 +20,7 @@ def gnd_ll(y, loc, scale, β):
 class PoG_Ens(nn.Module):
     """Ens trained as a Product of GNDs."""
     size: int
-    net: Optional[KwArgs] = None
+    net: KwArgs
     weights_init: Callable = initializers.ones
     logscale_init: Callable = initializers.zeros
     noise: str = 'homo'
@@ -29,7 +29,7 @@ class PoG_Ens(nn.Module):
     def setup(self):
         raise_if_not_in_list(self.noise, NOISE_TYPES, 'self.noise')
 
-        self.nets = [ResNet(**(self.net or {})) for _ in range(self.size)]
+        self.nets = [ResNet(**self.net) for _ in range(self.size)]
         weights = self.param(
             'weights',
             self.weights_init,

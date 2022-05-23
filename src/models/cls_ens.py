@@ -17,13 +17,13 @@ KwArgs = Mapping[str, Any]
 class Cls_Ens(nn.Module):
     """A standard classification ensemble."""
     size: int
-    net: Optional[KwArgs] = None
+    net: KwArgs
     weights_init: Callable = initializers.ones
     logscale_init: Callable = initializers.zeros
     learn_weights: bool = False
 
     def setup(self):
-        self.nets = [ResNet(**(self.net or {})) for _ in range(self.size)]
+        self.nets = [ResNet(**self.net) for _ in range(self.size)]
         weights = self.param(
             'weights',
             self.weights_init,
