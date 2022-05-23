@@ -1,3 +1,5 @@
+from typing import Callable
+
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
@@ -37,3 +39,12 @@ def get_locs_scales_probs(
     probs = nn.softmax(obj.weights)[:, jnp.newaxis]
 
     return locs, scales, probs
+
+
+def get_agg_fn(agg: str) -> Callable:
+    raise_if_not_in_list(agg, ['mean', 'sum'], 'aggregation')
+
+    if agg == 'mean':
+        return jnp.mean
+    else:
+        return jnp.sum

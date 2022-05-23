@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Any, Callable, Mapping, Optional
 
 import jax
 import jax.numpy as jnp
@@ -6,7 +6,11 @@ import flax.linen as nn
 from flax.linen import initializers
 from chex import Array
 
-from src.models.common import raise_if_not_in_list, NOISE_TYPES, get_locs_scales_probs
+from src.models.common import raise_if_not_in_list, NOISE_TYPES, get_locs_scales_probs, get_agg_fn
+from src.models.resnet import ResNet
+
+
+KwArgs = Mapping[str, Any]
 
 
 def gnd_ll(y, loc, scale, β):
@@ -16,7 +20,7 @@ def gnd_ll(y, loc, scale, β):
 class PoG_Ens(nn.Module):
     """Ens trained as a Product of GNDs."""
     size: int
-    make_net: Callable[[], nn.Module]
+    net: Optional[KwArgs] = None
     weights_init: Callable = initializers.ones
     logscale_init: Callable = initializers.zeros
     noise: str = 'homo'
@@ -24,7 +28,8 @@ class PoG_Ens(nn.Module):
 
     def setup(self):
         raise_if_not_in_list(self.noise, NOISE_TYPES, 'self.noise')
-        self.nets = [self.make_net() for _ in range(self.size)]
+
+        self.nets = [ResNet(**(self.net or {})) for _ in range(self.size)]
         weights = self.param(
             'weights',
             self.weights_init,
@@ -94,6 +99,7 @@ def make_PoG_Ens_loss(
     train: bool = True,
     # ^ controls how much our GND looks like a Guassian (β=2) or Uniform (β->inf)
     # should be taken from 2 to ??? duringn the process of training
+    aggregation: str = 'mean',
 ) -> Callable:
     """Creates a loss function for training a PoE DUN."""
     def batch_loss(params, state):
@@ -106,10 +112,11 @@ def make_PoG_Ens_loss(
 
             return nll, new_state
 
-        # broadcast over batch and take mean
+        # broadcast over batch and aggregate
+        agg = get_agg_fn(aggregation)
         loss_for_batch, new_state = jax.vmap(
             loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
-        return loss_for_batch.mean(), new_state
+        return agg(loss_for_batch, axis=0), new_state
 
     return batch_loss
