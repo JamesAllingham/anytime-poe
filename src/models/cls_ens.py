@@ -38,7 +38,7 @@ class Cls_Ens(nn.Module):
         train: bool = False,
     ) -> Array:
         ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)  # (M, O)
-        probs = nn.softmax(self.weights, axis=0)[:, jnp.newaxis]  # (M, 1)
+        probs = nn.softmax(self.weights, axis=0)  # (M,)
 
         def nll(y, logits):
             return  -1 * distrax.Categorical(logits).log_prob(y)
@@ -78,7 +78,7 @@ def make_Cls_Ens_loss(
         # define loss func for 1 example
         def loss_fn(params, x, y):
             loss, new_state = model.apply(
-                {"params": params, **state}, x, train=train,
+                {"params": params, **state}, x, y, train=train,
                 mutable=list(state.keys()) if train else {},
             )
 
