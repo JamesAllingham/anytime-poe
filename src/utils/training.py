@@ -17,6 +17,7 @@ from clu import parameter_overview
 
 from src.data import NumpyLoader
 import src.models as models
+import src.utils.optim
 
 
 PRNGKey = jnp.ndarray
@@ -94,7 +95,7 @@ def setup_training(
     else:
         lr = config.learning_rate
 
-    optim = getattr(optax, config.optim_name)
+    optim = getattr(src.utils.optim, config.optim_name)
     optim = optax.inject_hyperparams(optim)
     # This ^ allows us to access the lr as opt_state.hyperparams['learning_rate'].
 
