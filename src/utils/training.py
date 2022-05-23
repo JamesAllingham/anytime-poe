@@ -70,7 +70,8 @@ def _get_β_for_step(step, β_val_or_schedule):
 def setup_training(
     config: config_dict.ConfigDict,
     rng: PRNGKey,
-    init_data: Array,
+    init_x: Array,
+    init_y: Union[float, int]
 ) -> Tuple[nn.Module, TrainState]:
     """Helper which returns the model object and the corresponding initialised train state for a given config.
     """
@@ -78,7 +79,7 @@ def setup_training(
     model = model_cls(**config.model.to_dict())
 
     init_rng, rng = random.split(rng)
-    variables = model.init(init_rng, init_data, rng)
+    variables = model.init(init_rng, init_x, init_y)
 
     print(parameter_overview.get_parameter_overview(variables))
     # ^ This is really nice for summarising Jax models!
@@ -99,14 +100,13 @@ def setup_training(
     optim = optax.inject_hyperparams(optim)
     # This ^ allows us to access the lr as opt_state.hyperparams['learning_rate'].
 
-    if config.get('β_schedule_name', None):
-        schedule = getattr(optax, config.β_schedule_name)
-        β = schedule(
-            init_value=config.β,
-            **config.β_schedule.to_dict()
-        )
+    if config.get('β_schedule', False):
+        sigmoid = lambda x: 1 / (1 + jnp.exp(x))
+        add = config.β_schedule.end - config.β_schedule.start
+        half_steps = config.β_schedule.steps/2
+        β = lambda step: config.β_schedule.start + add * sigmoid((-step + half_steps)/(config.β_schedule.steps/10))
     else:
-        β = config.β
+        β = None
 
     state = TrainState.create(
         apply_fn=model.apply,
@@ -144,22 +144,24 @@ def train_loop(
 
     with wandb.init(**wandb_kwargs) as run:
         @jax.jit
-        def train_step(state, x_batch, rng):
-            loss_fn = make_loss_fn(model, x_batch, train=True, aggregation='sum')
+        def train_step(state, x_batch, y_batch, rng):
+            kwargs = {'β': state.β} if state.β is not None else {}
+            loss_fn = make_loss_fn(model, x_batch, y_batch, train=True, aggregation='sum', **kwargs)
             grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
             (nll, model_state), grads = grad_fn(
-                state.params, state.model_state, rng, state.β,
+                state.params, state.model_state, #rng,
             )
 
             return state.apply_gradients(grads=grads, model_state=model_state), nll
 
         @jax.jit
-        def eval_step(state, x_batch, rng):
-            eval_fn = make_eval_fn(model, x_batch, train=False, aggregation='sum')
+        def eval_step(state, x_batch, y_batch, rng):
+            kwargs = {'β': state.β} if state.β is not None else {}
+            eval_fn = make_eval_fn(model, x_batch, y_batch, train=False, aggregation='sum', **kwargs)
 
-            nll = eval_fn(
-                state.params, state.model_state, rng, state.β,
+            nll, _ = eval_fn(
+                state.params, state.model_state, #rng,
             )
 
             return nll
@@ -170,24 +172,25 @@ def train_loop(
         epochs = trange(1, config.epochs + 1)
         for epoch in epochs:
             batch_losses = []
-            for (x_batch, _) in train_loader:
+            for (x_batch, y_batch) in train_loader:
                 rng, batch_rng = random.split(rng)
-                state, nll = train_step(state, x_batch, batch_rng)
+                state, nll = train_step(state, x_batch, y_batch, batch_rng)
                 batch_losses.append(nll)
 
-            train_losses.append(jnp.sum(batch_losses) / len(train_loader.dataset))
+            train_losses.append(jnp.sum(jnp.array(batch_losses)) / len(train_loader.dataset))
 
             batch_losses = []
-            for i, (x_batch, _) in enumerate(val_loader):
+            for (x_batch, y_batch) in val_loader:
                 rng, eval_rng = random.split(rng)
-                nll = eval_step(state, x_batch, eval_rng)
+                nll = eval_step(state, x_batch, y_batch, eval_rng)
                 batch_losses.append(nll)
 
-            val_losses.append(jnp.sum(batch_losses) / len(val_loader.dataset))
+            val_losses.append(jnp.sum(jnp.array(batch_losses)) / len(val_loader.dataset))
 
             learning_rate = state.opt_state.hyperparams['learning_rate']
             metrics_str = (f'train loss: {train_losses[-1]:7.5f}, val_loss: {val_losses[-1]:7.5f}' +
-                           f', β: {state.β:3.1f}, lr: {learning_rate:7.5f}')
+                           (f', β: {state.β:3.1f}' if state.β is not None else '') +
+                           f', lr: {learning_rate:7.5f}')
             epochs.set_postfix_str(metrics_str)
             print(f'epoch: {epoch:3} - {metrics_str}')
 
@@ -210,12 +213,12 @@ def train_loop(
 
                 if test_loader is not None:
                     batch_losses = []
-                    for i, (x_batch, _) in enumerate(test_loader):
+                    for (x_batch, y_batch) in (test_loader):
                         eval_rng, test_rng = random.split(test_rng)
-                        nll = eval_step(state, x_batch, eval_rng)
+                        nll = eval_step(state, x_batch, y_batch, eval_rng)
                         batch_losses.append(nll)
 
-                    test_loss = jnp.sum(batch_losses) / len(test_loader.dataset)
+                    test_loss = jnp.sum(jnp.array(batch_losses)) / len(test_loader.dataset)
                     run.summary['test/loss'] = test_loss
 
     return state
