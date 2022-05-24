@@ -37,7 +37,7 @@ class Reg_Ens(nn.Module):
             self.logscale = self.param(
                 'logscale',
                 self.logscale_init,
-                (self.nets[0].out_size // 2,) if self.noise == 'homo' else (self.size, self.net.out_size // 2,)
+                (self.net['out_size'],) if self.noise == 'homo' else (self.size, self.net['out_size'],)
             )
 
     def __call__(
@@ -49,7 +49,7 @@ class Reg_Ens(nn.Module):
         locs, scales, probs = get_locs_scales_probs(self, x, train)
 
         def nll(y, loc, scale):
-            return  -1 * distrax.Normal(loc, scale).log_prob(y)
+            return  -1 * distrax.Normal(loc, scale).log_prob(y)[0]
 
         nlls = jax.vmap(nll, in_axes=(None, 0, 0))(y, locs, scales)
         loss = (nlls * probs).sum(axis=0)
