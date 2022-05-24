@@ -92,12 +92,12 @@ def make_Hard_OvR_Ens_loss(
                 mutable=list(state.keys()) if train else {},
             )
 
-            return loss, new_state, y, prod_ll, logZ
+            return loss, new_state#, y, prod_ll, logZ
 
         # broadcast over batch and aggregate
         agg = get_agg_fn(aggregation)
         loss_for_batch, new_state, ys, prod_lls, logZs = jax.vmap(
-            loss_fn, out_axes=(0, None, 0, 0, 0), in_axes=(None, 0, 0), axis_name="batch"
+            loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
         return agg(loss_for_batch, axis=0), (new_state, ys, agg(prod_lls, axis=0), agg(logZs, axis=0))
 
