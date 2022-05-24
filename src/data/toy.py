@@ -41,12 +41,12 @@ def gen_matern(
 
     x, y = _gen_matern()
 
-    (x_train, y_train), (x_valid, y_valid), (x_test, y_test) = _train_valid_test_split(x, y)
+    (x_train, y_train), (x_test, y_test), (x_valid, y_valid) = _train_valid_test_split(x, y, random_seed)
 
-    (x_train, x_valid, x_test) = _normalise_by_train(x_train, x_valid, x_test)
-    (y_train, y_valid, y_test) = _normalise_by_train(y_train, y_valid, y_test)
+    (x_train, x_test, x_valid) = _normalise_by_train(x_train, x_test, x_valid)
+    (y_train, y_test, y_valid) = _normalise_by_train(y_train, y_test, y_valid)
 
-    return _zip_dataset(x_train, y_train), _zip_dataset(x_valid, y_valid), _zip_dataset(x_test, y_test)
+    return _zip_dataset(x_train, y_train), _zip_dataset(x_test, y_test), _zip_dataset(x_valid, y_valid)
 
 
 def gen_simple_1d(
@@ -87,12 +87,12 @@ def gen_simple_1d(
 
     x, y = _gen_simple_1d()
 
-    (x_train, y_train), (x_valid, y_valid), (x_test, y_test) = _train_valid_test_split(x, y)
+    (x_train, y_train), (x_test, y_test), (x_valid, y_valid) = _train_valid_test_split(x, y, random_seed)
 
-    (x_train, x_valid, x_test) = _normalise_by_train(x_train, x_valid, x_test)
-    (y_train, y_valid, y_test) = _normalise_by_train(y_train, y_valid, y_test)
+    (x_train, x_test, x_valid) = _normalise_by_train(x_train, x_test, x_valid)
+    (y_train, y_test, y_valid) = _normalise_by_train(y_train, y_test, y_valid)
 
-    return _zip_dataset(x_train, y_train), _zip_dataset(x_valid, y_valid), _zip_dataset(x_test, y_test)
+    return _zip_dataset(x_train, y_train), _zip_dataset(x_test, y_test), _zip_dataset(x_valid, y_valid)
 
 
 def gen_wiggle(
@@ -120,12 +120,12 @@ def gen_wiggle(
     x = x[:, np.newaxis]
     y = y[:, np.newaxis]
 
-    (x_train, y_train), (x_valid, y_valid), (x_test, y_test) = _train_valid_test_split(x, y)
+    (x_train, y_train), (x_test, y_test), (x_valid, y_valid) = _train_valid_test_split(x, y, random_seed)
 
-    (x_train, x_valid, x_test) = _normalise_by_train(x_train, x_valid, x_test)
-    (y_train, y_valid, y_test) = _normalise_by_train(y_train, y_valid, y_test)
+    (x_train, x_test, x_valid) = _normalise_by_train(x_train, x_test, x_valid)
+    (y_train, y_test, y_valid) = _normalise_by_train(y_train, y_test, y_valid)
 
-    return _zip_dataset(x_train, y_train), _zip_dataset(x_valid, y_valid), _zip_dataset(x_test, y_test)
+    return _zip_dataset(x_train, y_train), _zip_dataset(x_test, y_test), _zip_dataset(x_valid, y_valid)
 
 
 def gen_spirals(
@@ -183,29 +183,29 @@ def gen_spirals(
         x = np.concatenate((x, points))
         y = np.concatenate((y, labels))
 
-    (x_train, y_train), (x_valid, y_valid), (x_test, y_test) = _train_valid_test_split(x, y)
+    (x_train, y_train), (x_test, y_test), (x_valid, y_valid) = _train_valid_test_split(x, y, random_seed)
 
-    (x_train, x_valid, x_test) = _normalise_by_train(x_train, x_valid, x_test)
+    (x_train, x_test, x_valid) = _normalise_by_train(x_train, x_test, x_valid)
 
-    return _zip_dataset(x_train, y_train), _zip_dataset(x_valid, y_valid), _zip_dataset(x_test, y_test)
+    return _zip_dataset(x_train, y_train), _zip_dataset(x_test, y_test), _zip_dataset(x_valid, y_valid)
 
 
 def _zip_dataset(x, y):
     return list(zip(x, y))
 
 
-def _normalise_by_train(train_data, valid_data, test_data):
+def _normalise_by_train(train_data, test_data, valid_data):
     train_mean, train_std = train_data.mean(axis=0), train_data.std(axis=0)
 
     train_data_norm = ((train_data - train_mean) / train_std).astype(np.float32)
     valid_data_norm = ((valid_data - train_mean) / train_std).astype(np.float32)
     test_data_norm = ((test_data - train_mean) / train_std).astype(np.float32)
-    return (train_data_norm, valid_data_norm, test_data_norm)
+    return (train_data_norm, test_data_norm, valid_data_norm)
 
 
-def _train_valid_test_split(x, y):
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, shuffle=True)
+def _train_valid_test_split(x, y, seed):
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, shuffle=True, random_state=seed)
 
-    x_valid, x_train, y_valid, y_train = train_test_split(x_train, y_train, test_size=0.1)
+    x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.1, random_state=seed)
 
-    return (x_train, y_train), (x_valid, y_valid), (x_test, y_test)
+    return (x_train, y_train), (x_test, y_test), (x_valid, y_valid)
