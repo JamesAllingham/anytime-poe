@@ -102,10 +102,13 @@ def setup_training(
     # This ^ allows us to access the lr as opt_state.hyperparams['learning_rate'].
 
     if config.get('β_schedule', False):
-        sigmoid = lambda x: 1 / (1 + jnp.exp(x))
         add = config.β_schedule.end - config.β_schedule.start
-        half_steps = config.β_schedule.steps/2
-        β = lambda step: config.β_schedule.start + add * sigmoid((-step + half_steps)/(config.β_schedule.steps/10))
+        if config.β_schedule.name == 'sigmoid':
+            sigmoid = lambda x: 1 / (1 + jnp.exp(x))
+            half_steps = config.β_schedule.steps/2
+            β = lambda step: config.β_schedule.start + add * sigmoid((-step + half_steps)/(config.β_schedule.steps/10))
+        else:  # linear
+            β = lambda step: jnp.minimum(config.β_schedule.start + add / config.β_schedule.steps * step, config.β_schedule.end)
     elif config.get('β', False):
         β = config.β
     else:
