@@ -205,7 +205,7 @@ def train_loop(
                 'learning_rate': learning_rate,
             }
 
-            if ((epoch % 20 == 1) or (epoch in [1, 2, 3, 4, 5])) and plot_fn is not None:
+            if (epoch % 20 == 1) and plot_fn is not None:
                 X_train, y_train = list(zip(*train_loader.dataset))
                 plot_fn(
                     model, state.params, state.model_state, train_losses[-1], val_losses[-1], X_train, y_train
