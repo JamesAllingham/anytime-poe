@@ -22,7 +22,7 @@ def get_config() -> config_dict.ConfigDict:
 
     config.optim_name = 'sgdw'
     config.optim = config_dict.ConfigDict()
-    config.optim.weight_decay = 3e-4
+    config.optim.weight_decay = 1e-4
     config.optim.momentum = 0.9
     config.learning_rate = 1e-4
 
@@ -42,7 +42,7 @@ def get_config() -> config_dict.ConfigDict:
 
     config.model.net = config_dict.ConfigDict()
     config.model.net.depth = 2
-    config.model.net.hidden_size = 100
+    config.model.net.hidden_size = 50
     out_size = 1
     out_size_mult = 2 if config.model.noise == 'hetero' else 1
     config.model.net.out_size = out_size * out_size_mult

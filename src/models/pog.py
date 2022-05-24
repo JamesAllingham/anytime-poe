@@ -78,23 +78,29 @@ class PoG_Ens(nn.Module):
     ) -> Array:
         locs, scales, _ = get_locs_scales_probs(self, x, train)
 
-        mins = locs - scales
-        maxs = locs + scales
-
-        max = jnp.min(maxs, axis=0)
-        min = jnp.max(mins, axis=0)
-
-        # max = max.at[min > max].set(0)
-        # min = min.at[min > max].set(0)
-        max, min = jnp.where(min > max, jnp.nan, max), jnp.where(min > max, jnp.nan, min)
-
-        scale = (max - min)/2
-        loc = max - scale
+        loc, scale = calculate_pog_loc_scale(locs, scales)
 
         if return_ens_preds:
             return (loc, scale), (locs, scales)
         else:
             return (loc, scale)
+
+
+def calculate_pog_loc_scale(locs, scales):
+    mins = locs - scales
+    maxs = locs + scales
+
+    max = jnp.min(maxs, axis=0)
+    min = jnp.max(mins, axis=0)
+
+    # max = max.at[min > max].set(0)
+    # min = min.at[min > max].set(0)
+    max, min = jnp.where(min > max, jnp.nan, max), jnp.where(min > max, jnp.nan, min)
+
+    scale = (max - min)/2
+    loc = max - scale
+
+    return loc, scale
 
 
 def make_PoG_Ens_loss(
