@@ -37,7 +37,7 @@ class PoN_Ens(nn.Module):
             self.logscale = self.param(
                 'logscale',
                 self.logscale_init,
-                (self.nets[0].out_size // 2,) if self.noise == 'homo' else (self.size, self.net.out_size // 2,)
+                (self.net['out_size'],) if self.noise == 'homo' else (self.size, self.net['out_size'],)
             )
 
     def __call__(
@@ -50,7 +50,7 @@ class PoN_Ens(nn.Module):
 
         loc, scale = normal_prod(locs, scales, probs)
 
-        nll = -distrax.Normal(loc, scale).log_prob(y)
+        nll = -distrax.Normal(loc, scale).log_prob(y)[0]
 
         return nll
 
@@ -98,10 +98,7 @@ def make_PoN_Ens_loss(
     return batch_loss
 
 
-def normal_prod(locs, scales, probs=None):
-    if probs == None:
-        probs = jnp.ones_like(locs)
-
+def normal_prod(locs, scales, probs):
     scales2 = scales ** 2
     θ_1 = ((locs / scales2) * probs).sum(axis=0)
     θ_2 = ((-1 / (2 * scales2)) * probs).sum(axis=0)

@@ -37,7 +37,7 @@ def get_locs_scales_probs(
         locs = ens_preds
         scales = jnp.repeat(jnp.exp(obj.logscale)[jnp.newaxis, :], M, axis=0)  # (M, O)
 
-    probs = nn.softmax(obj.weights)
+    probs = nn.softmax(obj.weights)[:, jnp.newaxis]
 
     return locs, scales, probs
 
