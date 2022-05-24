@@ -1,20 +1,24 @@
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Callable, Mapping
+from functools import partial
 
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
 from flax.linen import initializers
 from chex import Array
+import matplotlib.pyplot as plt
 
 from src.models.common import raise_if_not_in_list, NOISE_TYPES, get_locs_scales_probs, get_agg_fn
 from src.models.resnet import ResNet
+from src.models.pon import normal_prod
 
 
 KwArgs = Mapping[str, Any]
 
 
 def gnd_ll(y, loc, scale, β):
-    return jnp.log(β) - jnp.log(2*scale) - jax.scipy.special.gammaln(1/β) - (jnp.abs(y - loc)/scale)**β
+    per_dim_lls = jnp.log(β) - jnp.log(2*scale) - jax.scipy.special.gammaln(1/β) - (jnp.abs(y - loc)/scale)**β
+    return jnp.sum(per_dim_lls, axis=0, keepdims=True)
 
 
 class PoG_Ens(nn.Module):
@@ -40,7 +44,7 @@ class PoG_Ens(nn.Module):
             self.logscale = self.param(
                 'logscale',
                 self.logscale_init,
-                (self.nets[0].out_size // 2,) if self.noise == 'homo' else (self.size, self.net.out_size // 2,)
+                (self.net['out_size'],) if self.noise == 'homo' else (self.size, self.net['out_size'],)
             )
 
     def __call__(
@@ -53,14 +57,16 @@ class PoG_Ens(nn.Module):
         locs, scales, probs = get_locs_scales_probs(self, x, train)
 
         def product_logprob(y):
-            return jnp.sum(probs * jax.vmap(gnd_ll, in_axes=(None, 0, 0, None))(y, locs, scales, β))
+            prod_lls = jax.vmap(gnd_ll, in_axes=(None, 0, 0, None))(y, locs, scales, β)
+            return jnp.sum(probs * prod_lls)
 
         dy = 0.001
         ys = jnp.arange(-10, 10 + dy, dy)
         ps = jnp.exp(jax.vmap(product_logprob)(ys))
         Z = jnp.trapz(ps, ys)
 
-        nll = -(product_logprob(y) - jnp.log(Z + 1e-36))
+        log_prob = product_logprob(y)
+        nll = -(log_prob - jnp.log(Z + 1e-36))
 
         return nll
 
@@ -120,3 +126,61 @@ def make_PoG_Ens_loss(
         return agg(loss_for_batch, axis=0), new_state
 
     return batch_loss
+
+
+def make_PoG_plots(
+    pog_model, pog_params, pog_model_state, pog_tloss, pog_vloss, X_train, y_train,
+    ):
+    n_plots = 2
+    fig, axs = plt.subplots(1, n_plots, figsize=(7.5 * n_plots, 6))
+
+    xs = jnp.linspace(-3, 3, num=501)
+
+    # pog preds
+    pred_fun = partial(
+        pog_model.apply,
+        {"params": pog_params, **pog_model_state},
+        train=False, return_ens_preds=True,
+        method=pog_model.pred
+    )
+    (loc, scale), (locs, scales) = jax.vmap(
+        pred_fun, out_axes=(0, 1), in_axes=(0,), axis_name="batch"
+    )(xs.reshape(-1, 1))
+
+    size = locs.shape[0]
+
+    loc = loc[:, 0]
+    scale = scale[:, 0]
+    locs = locs[:, :, 0]
+    scales = scales[:, :, 0]
+
+    axs[0].scatter(X_train, y_train, c='C0')
+    for i in range(size):
+        axs[0].plot(xs, locs[i], c='k', alpha=0.25)
+
+    norm_scales = (scales*2)**0.5
+    norm_loc, norm_scale = normal_prod(locs, norm_scales, nn.softmax(pog_params['weights'])[:, jnp.newaxis])
+    axs[0].plot(xs, norm_loc, '--', c='C2', alpha=0.5)
+    axs[0].fill_between(xs, norm_loc - norm_scale, norm_loc + norm_scale, color='C2', alpha=0.1)
+
+    axs[0].plot(xs, loc, c='C1')
+    axs[0].fill_between(xs, loc - scale, loc + scale, color='C1', alpha=0.4)
+
+
+    axs[0].set_title(f"PoG - train loss: {pog_tloss:.6f}, val loss: {pog_vloss:.6f}")
+    axs[0].set_ylim(-2.5, 2.5)
+    axs[0].set_xlim(-3, 3)
+
+
+    # plot locs and scales for each member
+    axs[1].scatter(X_train, y_train, c='C0')
+    for i in range(size):
+        axs[1].plot(xs, locs[i], alpha=0.5)
+        axs[1].fill_between(xs, locs[i] - scales[i], locs[i] + scales[i], alpha=0.1)
+    axs[1].set_title(f"PoG Members")
+    axs[1].set_ylim(-2.5, 2.5)
+    axs[1].set_xlim(-3, 3)
+
+    plt.show()
+
+    return fig
