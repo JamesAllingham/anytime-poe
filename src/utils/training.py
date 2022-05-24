@@ -6,6 +6,7 @@ from tqdm.auto import trange
 import jax
 from jax import random
 from jax import numpy as jnp
+import distrax
 from flax.core.frozen_dict import FrozenDict
 from flax.training import train_state
 from flax import struct
@@ -149,6 +150,12 @@ def train_loop(
         @jax.jit
         def train_step(state, x_batch, y_batch, rng):
             kwargs = {'β': state.β} if state.β is not None else {}
+
+            if config.get('train_data_noise', False):
+                noise_dist = distrax.Uniform(-config.train_data_noise, config.train_data_noise)
+                noise = noise_dist.sample(seed=rng, sample_shape=x_batch.shape)
+                x_batch = x_batch + noise
+
             loss_fn = make_loss_fn(model, x_batch, y_batch, train=True, aggregation='mean', **kwargs)
             grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
