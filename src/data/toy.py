@@ -204,8 +204,8 @@ def _normalise_by_train(train_data, valid_data, test_data):
 
 
 def _train_valid_test_split(x, y):
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=2/3, shuffle=True)
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, shuffle=True)
 
-    x_valid, x_test, y_valid, y_test = train_test_split(x_test, y_test, test_size=0.5)
+    x_valid, x_train, y_valid, y_train = train_test_split(x_train, y_train, test_size=0.1)
 
     return (x_train, y_train), (x_valid, y_valid), (x_test, y_test)
