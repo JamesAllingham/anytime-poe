@@ -22,21 +22,22 @@ def get_locs_scales_probs(
     x: Array,
     train: bool = False,
 ):
-    ens_preds = jnp.stack([net(x, train=train) for net in obj.nets], axis=0)  # (M, O * 2)
+    ens_preds = jnp.stack([net(x, train=train) for net in obj.nets], axis=0)  # (M, O * 2) or (M, O)
     M, _ = ens_preds.shape
-    ens_preds = ens_preds.reshape(M, -1, 2)  # (M, O, 2)
-
-    locs = ens_preds[:, :, 0]  # (M, O)
 
     if obj.noise == 'hetero':
+        ens_preds = ens_preds.reshape(M, -1, 2)  # (M, O, 2)
+        locs = ens_preds[:, :, 0]  # (M, O)
         log_scales = ens_preds[:, :, 1]  # (M, O)
         scales = jnp.exp(log_scales)
     elif obj.noise == 'homo-per-ens':
+        locs = ens_preds
         scales = jnp.exp(obj.logscale)  # (M, O)
     else:
+        locs = ens_preds
         scales = jnp.repeat(jnp.exp(obj.logscale)[jnp.newaxis, :], M, axis=0)  # (M, O)
 
-    probs = nn.softmax(obj.weights)[:, jnp.newaxis]
+    probs = nn.softmax(obj.weights)
 
     return locs, scales, probs
 
