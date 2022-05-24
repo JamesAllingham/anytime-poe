@@ -105,6 +105,8 @@ def setup_training(
         add = config.β_schedule.end - config.β_schedule.start
         half_steps = config.β_schedule.steps/2
         β = lambda step: config.β_schedule.start + add * sigmoid((-step + half_steps)/(config.β_schedule.steps/10))
+    elif config.get('β', False):
+        β = config.β
     else:
         β = None
 
