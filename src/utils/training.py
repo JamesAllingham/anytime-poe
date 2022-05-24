@@ -132,6 +132,7 @@ def train_loop(
     val_loader: NumpyLoader,
     test_loader: Optional[NumpyLoader] = None,
     wandb_kwargs: Optional[Mapping] = None,
+    plot_fn: Optional[Callable] = None
 ) -> TrainState:
     """Runs the training loop!
     """
@@ -148,14 +149,14 @@ def train_loop(
         @jax.jit
         def train_step(state, x_batch, y_batch, rng):
             kwargs = {'β': state.β} if state.β is not None else {}
-            loss_fn = make_loss_fn(model, x_batch, y_batch, train=True, aggregation='sum', **kwargs)
+            loss_fn = make_loss_fn(model, x_batch, y_batch, train=True, aggregation='mean', **kwargs)
             grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
             (nll, model_state), grads = grad_fn(
                 state.params, state.model_state, #rng,
             )
 
-            return state.apply_gradients(grads=grads, model_state=model_state), nll
+            return state.apply_gradients(grads=grads, model_state=model_state), nll * len(x_batch)
 
         @jax.jit
         def eval_step(state, x_batch, y_batch, rng):
@@ -203,6 +204,13 @@ def train_loop(
                 'β': state.β,
                 'learning_rate': learning_rate,
             }
+
+            if ((epoch % 20 == 1) or (epoch in [1, 2, 3, 4, 5])) and plot_fn is not None:
+                X_train, y_train = list(zip(*train_loader.dataset))
+                plot_fn(
+                    model, state.params, state.model_state, train_losses[-1], val_losses[-1], X_train, y_train
+                )
+
             run.log(metrics)
 
             rng, test_rng = random.split(rng)
