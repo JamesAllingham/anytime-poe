@@ -12,7 +12,7 @@ def get_config() -> config_dict.ConfigDict:
     config.dataset.noise_std = 0.25
     config.dataset.heteroscedastic = False
 
-    config.train_data_noise = 0.02
+    config.train_data_noise = 0.01
 
     config.batch_size = 500
     config.epochs = 201
