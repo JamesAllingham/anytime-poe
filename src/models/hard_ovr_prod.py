@@ -42,21 +42,21 @@ class Hard_OvR_Ens(nn.Module):
         train: bool = False,
         β: int = 1,
     ) -> Array:
-        ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)
-        probs = nn.softmax(self.weights, axis=0)[:, jnp.newaxis]  # (M, 1)
+        ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)  # (Μ, Ο)
+        probs = nn.softmax(self.weights, axis=0)  # (M,)
 
-        n_classes = self.nets[0].out_size
+        n_classes = self.net['out_size']
 
         def product_logprob(y):
             y_1hot = jax.nn.one_hot(y, n_classes)
             return jnp.sum(probs * jax.vmap(hardened_ovr_ll, in_axes=(None, 0, None))(y_1hot, ens_logits, β))
 
-        ys = jnp.arange(1, n_classes + 1)
-        Z = jnp.sum(jnp.exp(jax.vmap(product_logprob)(ys), axis=0))
+        ys = jnp.arange(n_classes)
+        Z = jnp.sum(jnp.exp(jax.vmap(product_logprob)(ys)), axis=0)
 
         nll = -(product_logprob(y) - jnp.log(Z + 1e-36))
 
-        return nll
+        return nll#, y, product_logprob(y), jnp.log(Z + 1e-36)
 
     def pred(
         self,
@@ -87,18 +87,18 @@ def make_Hard_OvR_Ens_loss(
     def batch_loss(params, state):
         # define loss func for 1 example
         def loss_fn(params, x, y):
-            loss, new_state = model.apply(
+            (loss, y, prod_ll, logZ), new_state = model.apply(
                 {"params": params, **state}, x, y, train=train, β=β,
                 mutable=list(state.keys()) if train else {},
             )
 
-            return loss, new_state
+            return loss, new_state, y, prod_ll, logZ
 
         # broadcast over batch and aggregate
         agg = get_agg_fn(aggregation)
-        loss_for_batch, new_state = jax.vmap(
-            loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
+        loss_for_batch, new_state, ys, prod_lls, logZs = jax.vmap(
+            loss_fn, out_axes=(0, None, 0, 0, 0), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
-        return agg(loss_for_batch, axis=0), new_state
+        return agg(loss_for_batch, axis=0), (new_state, ys, agg(prod_lls, axis=0), agg(logZs, axis=0))
 
     return batch_loss
