@@ -27,6 +27,7 @@ def get_config() -> config_dict.ConfigDict:
     config.learning_rate = 1e-4
 
     config.β_schedule = config_dict.ConfigDict()
+    config.β_schedule.name = 'sigmoid'
     config.β_schedule.start = 2.
     config.β_schedule.end = 32.
     num_train = int(int(config.dataset.n_samples * 0.8) * 0.9)
