@@ -182,6 +182,8 @@ def train_loop(
 
         train_losses = []
         val_losses = []
+        best_val_loss = jnp.inf
+        best_state = None
         epochs = trange(1, config.epochs + 1)
         for epoch in epochs:
             batch_losses = []
@@ -217,16 +219,23 @@ def train_loop(
 
             if (epoch % 20 == 1) and plot_fn is not None:
                 X_train, y_train = list(zip(*train_loader.dataset))
-                plot_fn(
+                fit_plot = plot_fn(
                     model, state.params, state.model_state, train_losses[-1], val_losses[-1], X_train, y_train
                 )
+
+                metrics |= {'fit_plot': wandb.Image(fit_plot)}
 
             run.log(metrics)
 
             rng, test_rng = random.split(rng)
-            if val_losses[-1] <= min(val_losses):
+            if val_losses[-1] <= best_val_loss:
+                if config.get('β_schedule', False) and state.β <= 0.95 * config.β_schedule.end:
+                    continue
+
+                best_val_loss = val_losses[-1]
                 print("Best val_loss")
                 # TODO: add model saving.
+                best_state = state
 
                 run.summary['best_epoch'] = epoch
                 run.summary['best_val_loss'] = val_losses[-1]
@@ -241,4 +250,4 @@ def train_loop(
                     test_loss = jnp.sum(jnp.array(batch_losses)) / len(test_loader.dataset)
                     run.summary['test/loss'] = test_loss
 
-    return state
+    return state, best_state
