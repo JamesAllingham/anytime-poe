@@ -15,11 +15,11 @@ def get_config() -> config_dict.ConfigDict:
     # config.train_data_noise = 0.01
 
     config.batch_size = 500
-    config.epochs = 151
+    config.epochs = 201
 
-    config.optim_name = 'sgd'
+    config.optim_name = 'sgdw'
     config.optim = config_dict.ConfigDict()
-    # config.optim.weight_decay = 1e-4
+    config.optim.weight_decay = 1e-4
     config.optim.momentum = 0.9
     config.learning_rate = 1e-4
 
