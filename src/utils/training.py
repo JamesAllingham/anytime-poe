@@ -101,6 +101,7 @@ def setup_training(
     optim = optax.inject_hyperparams(optim)
     # This ^ allows us to access the lr as opt_state.hyperparams['learning_rate'].
 
+    # TODO: add sigmoidal schedule which ramps up more quickly and then gives more time for higher βs
     if config.get('β_schedule', False):
         add = config.β_schedule.end - config.β_schedule.start
         if config.β_schedule.name == 'sigmoid':
