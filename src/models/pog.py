@@ -134,7 +134,7 @@ def make_PoG_Ens_loss(
     return batch_loss
 
 
-def make_PoG_plots(
+def make_PoG_Ens_plots(
     pog_model, pog_params, pog_model_state, pog_tloss, pog_vloss, X_train, y_train,
     ):
     n_plots = 2
