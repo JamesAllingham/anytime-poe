@@ -102,3 +102,52 @@ def make_Hard_OvR_Ens_loss(
         return agg(loss_for_batch, axis=0), (new_state, ys, agg(prod_lls, axis=0), agg(logZs, axis=0))
 
     return batch_loss
+
+
+def make_Hard_OvR_Ens_plots(
+    hard_ovr_model, hard_ovr_state, hard_ovr_tloss, hard_ovr_vloss, X_train, y_train,
+):
+    hard_ovr_params, hard_ovr_model_state = hard_ovr_state.params, hard_ovr_state.model_state
+
+    n_plots = 1
+    fig, axs = plt.subplots(1, n_plots, figsize=(7.5 * n_plots, 6))
+
+    X_train, y_train = jnp.array(X_train), jnp.array(y_train)
+    n_class = int(y_train.max()) + 1
+
+    # hard_ovr preds
+    h = .05  # step size in the mesh
+    # create a mesh to plot in
+    x_min, x_max = X_train[:, 0].min() * 1.25, X_train[:, 0].max() * 1.25
+    y_min, y_max = X_train[:, 1].min() * 1.25, X_train[:, 1].max() * 1.25
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                         np.arange(y_min, y_max, h))
+    xs = np.c_[xx.ravel(), yy.ravel()]
+
+    pred_fun = partial(
+        hard_ovr_model.apply,
+        {"params": hard_ovr_params, **hard_ovr_model_state},
+        train=False, return_ens_preds=True, β=hard_ovr_state.β,
+        method=hard_ovr_model.pred
+    )
+    preds, _ = jax.vmap(
+        pred_fun, out_axes=(0, 1), in_axes=(0,), axis_name="batch"
+    )(xs)
+
+    # size = preds.shape[0]
+
+    colormaps = ['Blues', 'Oranges', 'Greens', 'Reds', 'Purples']
+    for i in range(n_class):
+        axs.pcolormesh(xx, yy, preds[:, i].reshape(xx.shape), alpha=0.25, cmap=colormaps[i])
+
+    # for i in range(depth + 1):
+    #     axs.contour(xx, yy, ens_preds[:, i, 0].reshape(xx.shape), cmap=plt.cm.gray, levels=[.5], alpha=0.3)
+
+    markers = ['o', 'v', 's', 'P', 'X']
+    for i in range(n_class):
+        idxs = (y_train == i)
+        axs.plot(X_train[idxs[:, 0], 0], X_train[idxs[:, 0], 1], markers[0], c=f'C{i}', alpha=1, ms=1)
+
+    plt.show()
+
+    return fig
