@@ -15,7 +15,8 @@ KwArgs = Mapping[str, Any]
 
 def hardened_ovr_ll(y_1hot, logits, T):
     σ = nn.sigmoid(T * logits)
-    return jnp.sum(y_1hot * jnp.log(σ) + (1 - y_1hot) * jnp.log(1 - σ), axis=0)
+    res = jnp.sum(y_1hot * jnp.log(σ) + (1 - y_1hot) * jnp.log(1 - σ), axis=0)
+    return res
 
 
 class Hard_OvR_Ens(nn.Module):
@@ -48,15 +49,18 @@ class Hard_OvR_Ens(nn.Module):
         n_classes = self.net['out_size']
 
         def product_logprob(y):
-            y_1hot = jax.nn.one_hot(y, n_classes)
-            return jnp.sum(probs * jax.vmap(hardened_ovr_ll, in_axes=(None, 0, None))(y_1hot, ens_logits, β))
+            y_1hot = jax.nn.one_hot(y, n_classes)[0]  # TODO: this would not work for pixelwise classification
+            lls = jax.vmap(hardened_ovr_ll, in_axes=(None, 0, None))(y_1hot, ens_logits, β)
+            res = jnp.sum(probs * lls, axis=0)
+            return res
 
-        ys = jnp.arange(n_classes)
+        ys = jnp.arange(n_classes)[:, jnp.newaxis]
         Z = jnp.sum(jnp.exp(jax.vmap(product_logprob)(ys)), axis=0)
 
-        nll = -(product_logprob(y) - jnp.log(Z + 1e-36))
+        prod_ll = product_logprob(y)
+        nll = -(prod_ll - jnp.log(Z + 1e-36))
 
-        return nll#, y, product_logprob(y), jnp.log(Z + 1e-36)
+        return nll #, y, product_logprob(y), jnp.log(Z + 1e-36)
 
     def pred(
         self,
