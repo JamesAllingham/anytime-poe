@@ -1,10 +1,13 @@
 from typing import Any, Callable, Mapping, Optional
+from functools import partial
 
+import numpy as np
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
 from flax.linen import initializers
 from chex import Array
+import matplotlib.pyplot as plt
 
 from src.models.common import get_agg_fn
 from src.models.resnet import ResNet
@@ -95,7 +98,7 @@ def make_Hard_OvR_Ens_loss(
     def batch_loss(params, state):
         # define loss func for 1 example
         def loss_fn(params, x, y):
-            (loss, y, prod_ll, logZ), new_state = model.apply(
+            loss, new_state = model.apply(
                 {"params": params, **state}, x, y, train=train, β=β,
                 mutable=list(state.keys()) if train else {},
             )
@@ -104,10 +107,10 @@ def make_Hard_OvR_Ens_loss(
 
         # broadcast over batch and aggregate
         agg = get_agg_fn(aggregation)
-        loss_for_batch, new_state, ys, prod_lls, logZs = jax.vmap(
+        loss_for_batch, new_state = jax.vmap(
             loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
-        return agg(loss_for_batch, axis=0), (new_state, ys, agg(prod_lls, axis=0), agg(logZs, axis=0))
+        return agg(loss_for_batch, axis=0), new_state
 
     return batch_loss
 
