@@ -112,8 +112,10 @@ def make_Reg_Ens_loss(
 
 
 def make_Reg_Ens_plots(
-    ens_model, ens_params, ens_model_state, ens_tloss, ens_vloss, X_train, y_train,
+    ens_model, ens_state, ens_tloss, ens_vloss, X_train, y_train,
     ):
+    ens_params, ens_model_state = ens_state.params, ens_state.model_state
+
     n_plots = 2
     fig, axs = plt.subplots(1, n_plots, figsize=(7.5 * n_plots, 6))
 

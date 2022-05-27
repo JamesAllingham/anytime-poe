@@ -135,8 +135,10 @@ def make_PoG_Ens_loss(
 
 
 def make_PoG_Ens_plots(
-    pog_model, pog_params, pog_model_state, pog_tloss, pog_vloss, X_train, y_train,
+    pog_model, pog_state, pog_tloss, pog_vloss, X_train, y_train,
     ):
+    pog_params, pog_model_state = pog_state.params, pog_state.model_state
+
     n_plots = 2
     fig, axs = plt.subplots(1, n_plots, figsize=(7.5 * n_plots, 6))
 

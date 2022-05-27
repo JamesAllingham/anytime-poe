@@ -205,7 +205,7 @@ def train_loop(
 
             learning_rate = state.opt_state.hyperparams['learning_rate']
             metrics_str = (f'train loss: {train_losses[-1]:7.5f}, val_loss: {val_losses[-1]:7.5f}' +
-                           (f', β: {state.β:3.1f}' if state.β is not None else '') +
+                           (f', β: {state.β:.5f}' if state.β is not None else '') +
                            f', lr: {learning_rate:7.5f}')
             epochs.set_postfix_str(metrics_str)
             print(f'epoch: {epoch:3} - {metrics_str}')
@@ -221,7 +221,7 @@ def train_loop(
             if (epoch % 20 == 1) and plot_fn is not None:
                 X_train, y_train = list(zip(*train_loader.dataset))
                 fit_plot = plot_fn(
-                    model, state.params, state.model_state, train_losses[-1], val_losses[-1], X_train, y_train
+                    model, state, train_losses[-1], val_losses[-1], X_train, y_train,
                 )
 
                 metrics |= {'fit_plot': wandb.Image(fit_plot)}

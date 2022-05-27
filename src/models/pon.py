@@ -113,8 +113,10 @@ def normal_prod(locs, scales, probs):
 
 
 def make_PoN_Ens_plots(
-    pon_model, pon_params, pon_model_state, pon_tloss, pon_vloss, X_train, y_train,
+    pon_model, pon_state, pon_tloss, pon_vloss, X_train, y_train,
     ):
+    pon_params, pon_model_state = pon_state.params, pon_state.model_state
+
     n_plots = 2
     fig, axs = plt.subplots(1, n_plots, figsize=(7.5 * n_plots, 6))
 
