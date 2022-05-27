@@ -63,9 +63,13 @@ class Hard_OvR_Ens(nn.Module):
         x: Array,
         train: bool = False,
         return_ens_preds = False,
+        hard_pred = False,
+        β: int = 1,
     ) -> Array:
         ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)  # (M, O)
-        ens_preds = jnp.round(nn.sigmoid(ens_logits))
+        ens_preds = nn.sigmoid(β * ens_logits)
+        if hard_pred:
+            ens_preds = jnp.round(ens_preds)
 
         preds = ens_preds.prod(axis=0)
 
