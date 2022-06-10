@@ -137,7 +137,8 @@ def train_loop(
     val_loader: NumpyLoader,
     test_loader: Optional[NumpyLoader] = None,
     wandb_kwargs: Optional[Mapping] = None,
-    plot_fn: Optional[Callable] = None
+    plot_fn: Optional[Callable] = None,
+    plot_freq : int = 10,
 ) -> TrainState:
     """Runs the training loop!
     """
@@ -163,49 +164,58 @@ def train_loop(
             loss_fn = make_loss_fn(model, x_batch, y_batch, train=True, aggregation='mean', **kwargs)
             grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
-            (nll, model_state), grads = grad_fn(
-                state.params, state.model_state, #rng,
+            (nll, (model_state, err)), grads = grad_fn(
+                state.params, state.model_state, rng,
             )
 
-            return state.apply_gradients(grads=grads, model_state=model_state), nll * len(x_batch)
+            return state.apply_gradients(grads=grads, model_state=model_state), nll * len(x_batch), err * len(x_batch)
 
         @jax.jit
         def eval_step(state, x_batch, y_batch, rng):
             kwargs = {'β': state.β} if state.β is not None else {}
             eval_fn = make_eval_fn(model, x_batch, y_batch, train=False, aggregation='sum', **kwargs)
 
-            nll, _ = eval_fn(
-                state.params, state.model_state, #rng,
+            nll, (_, err) = eval_fn(
+                state.params, state.model_state, rng,
             )
 
-            return nll
+            return nll, err
 
 
         train_losses = []
+        train_errs = []
         val_losses = []
+        val_errs = []
         best_val_loss = jnp.inf
         best_state = None
         epochs = trange(1, config.epochs + 1)
         for epoch in epochs:
             batch_losses = []
+            batch_errs = []
             for (x_batch, y_batch) in train_loader:
                 rng, batch_rng = random.split(rng)
-                state, nll = train_step(state, x_batch, y_batch, batch_rng)
+                state, nll, err = train_step(state, x_batch, y_batch, batch_rng)
                 batch_losses.append(nll)
+                batch_errs.append(err)
 
             train_losses.append(jnp.sum(jnp.array(batch_losses)) / len(train_loader.dataset))
+            train_errs.append(jnp.sum(jnp.array(batch_errs)) / len(train_loader.dataset))
 
             batch_losses = []
+            batch_errs = []
             for (x_batch, y_batch) in val_loader:
                 rng, eval_rng = random.split(rng)
-                nll = eval_step(state, x_batch, y_batch, eval_rng)
+                nll, err = eval_step(state, x_batch, y_batch, eval_rng)
                 batch_losses.append(nll)
+                batch_errs.append(err)
 
             val_losses.append(jnp.sum(jnp.array(batch_losses)) / len(val_loader.dataset))
+            val_errs.append(jnp.sum(jnp.array(batch_errs)) / len(val_loader.dataset))
 
             learning_rate = state.opt_state.hyperparams['learning_rate']
-            metrics_str = (f'train loss: {train_losses[-1]:7.5f}, val_loss: {val_losses[-1]:7.5f}' +
-                           (f', β: {state.β:.5f}' if state.β is not None else '') +
+            metrics_str = (f'train loss: {train_losses[-1]:7.5f}, val loss: {val_losses[-1]:7.5f}' +
+                           f', train err: {train_errs[-1]:6.4f}, val err: {val_errs[-1]:6.4f}' +
+                           (f', β: {state.β:.4f}' if state.β is not None else '') +
                            f', lr: {learning_rate:7.5f}')
             epochs.set_postfix_str(metrics_str)
             print(f'epoch: {epoch:3} - {metrics_str}')
@@ -214,14 +224,17 @@ def train_loop(
                 'epoch': epoch,
                 'train/loss': train_losses[-1],
                 'val/loss': val_losses[-1],
+                'train/err': train_errs[-1],
+                'val/err': val_errs[-1],
                 'β': state.β,
                 'learning_rate': learning_rate,
             }
 
-            if (epoch % 20 == 1) and plot_fn is not None:
+            if (epoch % plot_freq == 0) and plot_fn is not None:
                 X_train, y_train = list(zip(*train_loader.dataset))
+                X_val, y_val = list(zip(*val_loader.dataset))
                 fit_plot = plot_fn(
-                    model, state, train_losses[-1], val_losses[-1], X_train, y_train,
+                    model, state, train_losses[-1], val_losses[-1], X_train, y_train, X_val, y_val,
                 )
 
                 metrics |= {'fit_plot': wandb.Image(fit_plot)}
@@ -243,12 +256,15 @@ def train_loop(
 
                 if test_loader is not None:
                     batch_losses = []
+                    batch_errs = []
                     for (x_batch, y_batch) in (test_loader):
                         eval_rng, test_rng = random.split(test_rng)
-                        nll = eval_step(state, x_batch, y_batch, eval_rng)
+                        nll, err = eval_step(state, x_batch, y_batch, eval_rng)
                         batch_losses.append(nll)
 
                     test_loss = jnp.sum(jnp.array(batch_losses)) / len(test_loader.dataset)
+                    test_err = jnp.sum(jnp.array(batch_errs)) / len(test_loader.dataset)
                     run.summary['test/loss'] = test_loss
+                    run.summary['test/err'] = test_err
 
     return state, best_state
