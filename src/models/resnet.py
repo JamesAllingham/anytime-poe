@@ -1,4 +1,4 @@
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 from functools import partial
 
 import jax.numpy as jnp
@@ -14,6 +14,7 @@ class ResBlock(nn.Module):
     dense: ModuleDef
     norm: ModuleDef
     act: Callable
+    drop: Optional[ModuleDef] = None
 
     @nn.compact
     def __call__(self, x,):
@@ -21,6 +22,8 @@ class ResBlock(nn.Module):
         y = self.dense(self.hidden_size)(x)
         y = self.act(y)
         y = self.norm()(y)
+        if self.drop is not None:
+            y = self.drop()(y)
 
         return residual + y
 
@@ -33,6 +36,7 @@ class ResNet(nn.Module):
     kernel_init: Callable = pytorch_init()
     bias_init: Callable = pytorch_init(in_axis=-1, out_axis=-1)
     # ^ Not quite the same is what PyTorch does for biases since in_dim isn't always the same as out_dim
+    p_drop: float = 0.
 
     @nn.compact
     def __call__(self, x: Array, train: bool = False) -> Array:
@@ -49,11 +53,18 @@ class ResNet(nn.Module):
             # NOTE: 0.9 matches the PyTorch default of 0.1 as it is applied differently
             axis_name='batch',
         )
+        drop = partial(
+            nn.Dropout,
+            rate=self.p_drop,
+            deterministic=not train,
+        ) if self.p_drop > 0. else None
+
         res_block = partial(
             ResBlock,
             dense=dense,
             norm=norm,
-            act=nn.relu
+            act=nn.relu,
+            drop=drop,
         )
 
         x = dense(self.hidden_size, name='input_layer')(x)
