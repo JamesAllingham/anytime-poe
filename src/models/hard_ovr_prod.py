@@ -63,7 +63,11 @@ class Hard_OvR_Ens(nn.Module):
         prod_ll = product_logprob(y)
         nll = -(prod_ll - jnp.log(Z + 1e-36))
 
-        return nll #, y, product_logprob(y), jnp.log(Z + 1e-36)
+        prod_preds = nn.sigmoid(β * ens_logits).prod(axis=0)
+        pred = prod_preds.argmax(axis=0)
+        err = y != pred
+
+        return nll, err
 
     def pred(
         self,
@@ -95,27 +99,28 @@ def make_Hard_OvR_Ens_loss(
     aggregation: str = 'mean',
 ) -> Callable:
     """Creates a loss function for training a Hard One-vs-Rest Ens."""
-    def batch_loss(params, state):
+    def batch_loss(params, state, rng):
         # define loss func for 1 example
         def loss_fn(params, x, y):
-            loss, new_state = model.apply(
+            (loss, err), new_state = model.apply(
                 {"params": params, **state}, x, y, train=train, β=β,
                 mutable=list(state.keys()) if train else {},
+                rngs={'dropout': rng},
             )
 
-            return loss, new_state#, y, prod_ll, logZ
+            return loss, new_state, err
 
         # broadcast over batch and aggregate
         agg = get_agg_fn(aggregation)
-        loss_for_batch, new_state = jax.vmap(
-            loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
+        loss_for_batch, new_state, err_for_batch = jax.vmap(
+            loss_fn, out_axes=(0, None, 0), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
-        return agg(loss_for_batch, axis=0), new_state
+        return agg(loss_for_batch, axis=0), (new_state, agg(err_for_batch, axis=0))
 
     return batch_loss
 
 
-def make_Hard_OvR_Ens_plots(
+def make_Hard_OvR_Ens_toy_plots(
     hard_ovr_model, hard_ovr_state, hard_ovr_tloss, hard_ovr_vloss, X_train, y_train,
 ):
     hard_ovr_params, hard_ovr_model_state = hard_ovr_state.params, hard_ovr_state.model_state
