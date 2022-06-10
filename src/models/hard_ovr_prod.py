@@ -1,12 +1,13 @@
 from typing import Any, Callable, Mapping, Optional
 from functools import partial
+from attr import mutable
 
 import numpy as np
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
 from flax.linen import initializers
-from chex import Array
+from chex import Array, assert_rank, assert_equal_shape
 import matplotlib.pyplot as plt
 
 from src.models.common import get_agg_fn
@@ -17,7 +18,11 @@ KwArgs = Mapping[str, Any]
 
 
 def hardened_ovr_ll(y_1hot, logits, T):
-    σ = nn.sigmoid(T * logits)
+    assert_rank(T, 0)
+    assert_rank(y_1hot, 1)
+    assert_equal_shape([y_1hot, logits])
+
+    σ = nn.sigmoid(T * logits).clip(1e-6, 1 - 1e-6)
     res = jnp.sum(y_1hot * jnp.log(σ) + (1 - y_1hot) * jnp.log(1 - σ), axis=0)
     return res
 
@@ -52,12 +57,12 @@ class Hard_OvR_Ens(nn.Module):
         n_classes = self.net['out_size']
 
         def product_logprob(y):
-            y_1hot = jax.nn.one_hot(y, n_classes)[0]  # TODO: this would not work for pixelwise classification
+            y_1hot = jax.nn.one_hot(y, n_classes)  # TODO: this would not work for pixelwise classification
             lls = jax.vmap(hardened_ovr_ll, in_axes=(None, 0, None))(y_1hot, ens_logits, β)
             res = jnp.sum(probs * lls, axis=0)
             return res
 
-        ys = jnp.arange(n_classes)[:, jnp.newaxis]
+        ys = jnp.arange(n_classes)
         Z = jnp.sum(jnp.exp(jax.vmap(product_logprob)(ys)), axis=0)
 
         prod_ll = product_logprob(y)
