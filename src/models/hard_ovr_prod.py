@@ -162,3 +162,59 @@ def make_Hard_OvR_Ens_plots(
     plt.show()
 
     return fig
+
+
+def make_Hard_OvR_Ens_MNIST_plots(
+    hard_ovr_model, hard_ovr_state, hard_ovr_tloss, hard_ovr_vloss, X_train, y_train, X_val, y_val,
+):
+    hard_ovr_params, hard_ovr_model_state = hard_ovr_state.params, hard_ovr_state.model_state
+
+    n_plots = 8
+    fig, axs = plt.subplots(1, n_plots, figsize=(2.5 * n_plots, 2), layout='tight')
+    fig.patch.set_alpha(1.)
+
+    X_train, y_train = jnp.array(X_train), jnp.array(y_train)
+    X_val, y_val = jnp.array(X_val), jnp.array(y_val)
+
+    # hard_ovr preds
+    xs = X_val
+    ys = y_val
+
+    pred_fun = partial(
+        hard_ovr_model.apply,
+        {"params": hard_ovr_params, **hard_ovr_model_state},
+        train=False, return_ens_preds=False, β=hard_ovr_state.β,
+        method=hard_ovr_model.pred
+    )
+    preds = jax.vmap(
+        pred_fun, axis_name="batch"
+    )(xs)
+
+
+    pred_fun = partial(
+        hard_ovr_model.apply,
+        {"params": hard_ovr_params, **hard_ovr_model_state},
+        train=False, β=hard_ovr_state.β,
+    )
+    lls, _ = jax.vmap(
+        pred_fun, axis_name="batch", out_axes=(0, 0),
+    )(xs, ys)
+
+    # get idxs of NaN values in lls
+    # idxs = jnp.where(jnp.isnan(lls))[0]
+    # print(f'{len(idxs)}/{len(lls)} NaN values in lls')
+    # print(f'{idxs}')
+    # for pred, y in zip(preds[idxs], ys[idxs]):
+    #     print(f'pred: {pred}')
+    #     print(f'y: {y}')
+    #     print(hardened_ovr_ll(jax.nn.one_hot(y, 10), jnp.log(pred/(1 - pred)), hard_ovr_state.β))
+
+    for idx in range(n_plots):
+        axs[idx].imshow(xs[idx].reshape(28, 28), cmap='gray')
+        axs[idx].set_title(f'{jnp.argmax(preds[idx])} – {jnp.max(preds[idx]):.4f} ({ys[idx]} – {preds[idx][ys[idx]]:.4f})', fontsize=12)
+        axs[idx].set_xticks([])
+        axs[idx].set_yticks([])
+
+    plt.show()
+
+    return fig
