@@ -46,7 +46,10 @@ class Cls_Ens(nn.Module):
         nlls = jax.vmap(nll, in_axes=(None, 0))(y, ens_logits)
         loss = (nlls * probs).sum(axis=0)
 
-        return loss
+        pred = nn.softmax(ens_logits.mean(axis=0))
+        err = y != jnp.argmax(pred, axis=0)
+
+        return loss, err
 
     def pred(
         self,
@@ -77,19 +80,19 @@ def make_Cls_Ens_loss(
     def batch_loss(params, state, rng):
         # define loss func for 1 example
         def loss_fn(params, x, y):
-            loss, new_state = model.apply(
+            (loss, err), new_state = model.apply(
                 {"params": params, **state}, x, y, train=train,
                 mutable=list(state.keys()) if train else {},
                 rngs={'dropout': rng},
             )
 
-            return loss, new_state
+            return loss, new_state, err
 
         # broadcast over batch and aggregate
         agg = get_agg_fn(aggregation)
-        loss_for_batch, new_state = jax.vmap(
-            loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
+        loss_for_batch, new_state, err_for_batch = jax.vmap(
+            loss_fn, out_axes=(0, None, 0), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
-        return agg(loss_for_batch, axis=0), new_state
+        return agg(loss_for_batch, axis=0), (new_state, agg(err_for_batch, axis=0))
 
     return batch_loss
