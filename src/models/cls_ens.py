@@ -74,12 +74,13 @@ def make_Cls_Ens_loss(
     aggregation: str = 'mean',
 ) -> Callable:
     """Creates a loss function for training a std Ens."""
-    def batch_loss(params, state):
+    def batch_loss(params, state, rng):
         # define loss func for 1 example
         def loss_fn(params, x, y):
             loss, new_state = model.apply(
                 {"params": params, **state}, x, y, train=train,
                 mutable=list(state.keys()) if train else {},
+                rngs={'dropout': rng},
             )
 
             return loss, new_state
