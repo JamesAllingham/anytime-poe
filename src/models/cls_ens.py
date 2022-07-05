@@ -68,6 +68,14 @@ class Cls_Ens(nn.Module):
         else:
             return preds
 
+    def ens_logits(
+        self,
+        x: Array,
+        train: bool = False,
+    ) -> Array:
+        ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)  # (M, O)
+        return ens_logits
+
 
 def make_Cls_Ens_loss(
     model: Cls_Ens,

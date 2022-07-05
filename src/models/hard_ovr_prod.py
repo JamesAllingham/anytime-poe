@@ -94,6 +94,14 @@ class Hard_OvR_Ens(nn.Module):
         else:
             return preds
 
+    def ens_logits(
+        self,
+        x: Array,
+        train: bool = False,
+    ) -> Array:
+        ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)
+        return ens_logits
+
 
 def make_Hard_OvR_Ens_loss(
     model: Hard_OvR_Ens,
@@ -126,7 +134,7 @@ def make_Hard_OvR_Ens_loss(
 
 
 def make_Hard_OvR_Ens_toy_plots(
-    hard_ovr_model, hard_ovr_state, hard_ovr_tloss, hard_ovr_vloss, X_train, y_train,
+    hard_ovr_model, hard_ovr_state, hard_ovr_tloss, hard_ovr_vloss, X_train, y_train,  X_val, y_val,
 ):
     hard_ovr_params, hard_ovr_model_state = hard_ovr_state.params, hard_ovr_state.model_state
 
