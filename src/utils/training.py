@@ -187,6 +187,7 @@ def train_loop(
         val_losses = []
         val_errs = []
         best_val_loss = jnp.inf
+        best_val_err = jnp.inf
         best_state = None
         epochs = trange(1, config.epochs + 1)
         for epoch in epochs:
@@ -242,17 +243,17 @@ def train_loop(
             run.log(metrics)
 
             rng, test_rng = random.split(rng)
-            if val_losses[-1] <= best_val_loss:
-                if config.get('β_schedule', False) and state.β <= 0.95 * config.β_schedule.end:
+            if val_errs[-1] <= best_val_err:
+                if config.get('β_schedule', False) and state.β <= 0.9 * config.β_schedule.end:
                     continue
 
-                best_val_loss = val_losses[-1]
-                print("Best val_loss")
+                best_val_err = val_errs[-1]
+                print("Best val_err")
                 # TODO: add model saving.
                 best_state = state
 
                 run.summary['best_epoch'] = epoch
-                run.summary['best_val_loss'] = val_losses[-1]
+                run.summary['best_val_err'] = val_errs[-1]
 
                 if test_loader is not None:
                     batch_losses = []
