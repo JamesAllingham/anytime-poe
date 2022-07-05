@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import flax.linen as nn
 from flax.linen import initializers
 from chex import Array
+import distrax
 import matplotlib.pyplot as plt
 
 from src.models.common import raise_if_not_in_list, NOISE_TYPES, get_locs_scales_probs, get_agg_fn
@@ -53,6 +54,7 @@ class PoG_Ens(nn.Module):
         y: int,
         train: bool = False,
         β: int = 2,
+        per_member_loss: bool = False,
     ) -> Array:
         locs, scales, probs = get_locs_scales_probs(self, x, train)
 
@@ -70,6 +72,17 @@ class PoG_Ens(nn.Module):
 
         loc, _ = calculate_pog_loc_scale(locs, scales)
         err = jnp.mean((loc - y)**2)
+
+        if not per_member_loss:
+            loss = nll
+        else:
+            def nll_fn(y, loc, scale):
+                return  -1 * distrax.Normal(loc, scale).log_prob(y)
+
+            nlls = jax.vmap(nll_fn, in_axes=(None, 0, 0))(y, locs, scales)
+
+            loss = 0.5*nll + 0.5*jnp.sum(nlls, axis=0)[0]
+
         return loss, err
 
     def pred(
@@ -111,6 +124,7 @@ def make_PoG_Ens_loss(
     y_batch: Array,
     β: int,
     train: bool = True,
+    per_member_loss: bool = False,
     # ^ controls how much our GND looks like a Guassian (β=2) or Uniform (β->inf)
     # should be taken from 2 to ??? duringn the process of training
     aggregation: str = 'mean',
@@ -121,6 +135,7 @@ def make_PoG_Ens_loss(
         def loss_fn(params, x, y):
             (loss, err), new_state = model.apply(
                 {"params": params, **state}, x, y, train=train, β=β,
+                per_member_loss=per_member_loss,
                 mutable=list(state.keys()) if train else {},
             )
 
