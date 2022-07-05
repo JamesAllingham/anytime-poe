@@ -54,7 +54,9 @@ class PoN_Ens(nn.Module):
 
         nll = -distrax.Normal(loc, scale).log_prob(y)[0]
 
-        return nll
+        err = jnp.mean((loc - y)**2)
+
+        return nll, err
 
     def pred(
         self,
@@ -80,22 +82,22 @@ def make_PoN_Ens_loss(
     aggregation: str = 'mean',
 ) -> Callable:
     """Creates a loss function for training a PoE Ens."""
-    def batch_loss(params, state):
+    def batch_loss(params, state, rng):
         # define loss func for 1 example
         def loss_fn(params, x, y):
-            nll, new_state = model.apply(
+            (nll, err), new_state = model.apply(
                 {"params": params, **state}, x, y, train=train,
                 mutable=list(state.keys()) if train else {},
             )
 
-            return nll, new_state
+            return nll, new_state, err
 
         # broadcast over batch and aggregate
         agg = get_agg_fn(aggregation)
-        loss_for_batch, new_state = jax.vmap(
-            loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
+        loss_for_batch, new_state, err_for_batch = jax.vmap(
+            loss_fn, out_axes=(0, None, 0), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
-        return agg(loss_for_batch, axis=0), new_state
+        return agg(loss_for_batch, axis=0), (new_state, agg(err_for_batch, axis=0))
 
     return batch_loss
 
@@ -113,7 +115,7 @@ def normal_prod(locs, scales, probs):
 
 
 def make_PoN_Ens_plots(
-    pon_model, pon_state, pon_tloss, pon_vloss, X_train, y_train,
+    pon_model, pon_state, pon_tloss, pon_vloss, X_train, y_train, X_val, y_val,
     ):
     pon_params, pon_model_state = pon_state.params, pon_state.model_state
 

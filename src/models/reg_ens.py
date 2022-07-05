@@ -57,7 +57,9 @@ class Reg_Ens(nn.Module):
         loss = (nlls).sum(axis=0)[0]
         # TODO: include weights, but don't decrease effective LR to each ens member?
 
-        return loss
+        err = jnp.mean((locs.mean(axis=0) - y)**2)
+
+        return loss, err
 
     def pred(
         self,
@@ -91,28 +93,28 @@ def make_Reg_Ens_loss(
     aggregation: str = 'mean',
 ) -> Callable:
     """Creates a loss function for training a std Ens."""
-    def batch_loss(params, state):
+    def batch_loss(params, state, rng):
         # define loss func for 1 example
         def loss_fn(params, x, y):
-            loss, new_state = model.apply(
+            (loss, err), new_state = model.apply(
                 {"params": params, **state}, x, y, train=train,
                 mutable=list(state.keys()) if train else {},
             )
 
-            return loss, new_state
+            return loss, new_state, err
 
         # broadcast over batch and aggregate
         agg = get_agg_fn(aggregation)
-        loss_for_batch, new_state = jax.vmap(
-            loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
+        loss_for_batch, new_state, err_for_batch = jax.vmap(
+            loss_fn, out_axes=(0, None, 0), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
-        return agg(loss_for_batch, axis=0), new_state
+        return agg(loss_for_batch, axis=0), (new_state, agg(err_for_batch, axis=0))
 
     return batch_loss
 
 
 def make_Reg_Ens_plots(
-    ens_model, ens_state, ens_tloss, ens_vloss, X_train, y_train,
+    ens_model, ens_state, ens_tloss, ens_vloss, X_train, y_train, X_val, y_val,
     ):
     ens_params, ens_model_state = ens_state.params, ens_state.model_state
 

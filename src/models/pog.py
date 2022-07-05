@@ -68,7 +68,9 @@ class PoG_Ens(nn.Module):
         log_prob = product_logprob(y)
         nll = -(log_prob - jnp.log(Z + 1e-36))
 
-        return nll
+        loc, _ = calculate_pog_loc_scale(locs, scales)
+        err = jnp.mean((loc - y)**2)
+        return loss, err
 
     def pred(
         self,
@@ -114,28 +116,28 @@ def make_PoG_Ens_loss(
     aggregation: str = 'mean',
 ) -> Callable:
     """Creates a loss function for training a PoE DUN."""
-    def batch_loss(params, state):
+    def batch_loss(params, state, rng):
         # define loss func for 1 example
         def loss_fn(params, x, y):
-            nll, new_state = model.apply(
+            (loss, err), new_state = model.apply(
                 {"params": params, **state}, x, y, train=train, β=β,
                 mutable=list(state.keys()) if train else {},
             )
 
-            return nll, new_state
+            return loss, new_state, err
 
         # broadcast over batch and aggregate
         agg = get_agg_fn(aggregation)
-        loss_for_batch, new_state = jax.vmap(
-            loss_fn, out_axes=(0, None), in_axes=(None, 0, 0), axis_name="batch"
+        loss_for_batch, new_state, err_for_batch = jax.vmap(
+            loss_fn, out_axes=(0, None, 0), in_axes=(None, 0, 0), axis_name="batch"
         )(params, x_batch, y_batch)
-        return agg(loss_for_batch, axis=0), new_state
+        return agg(loss_for_batch, axis=0), (new_state, agg(err_for_batch, axis=0))
 
     return batch_loss
 
 
 def make_PoG_Ens_plots(
-    pog_model, pog_state, pog_tloss, pog_vloss, X_train, y_train,
+    pog_model, pog_state, pog_tloss, pog_vloss, X_train, y_train, X_val, y_val,
     ):
     pog_params, pog_model_state = pog_state.params, pog_state.model_state
 
