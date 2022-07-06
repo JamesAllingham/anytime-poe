@@ -157,9 +157,12 @@ def train_loop(
             kwargs = {'β': state.β} if state.β is not None else {}
 
             if config.get('train_data_noise', False):
+                x_noise_rng, y_noise_rng = random.split(rng)
                 noise_dist = distrax.Uniform(-config.train_data_noise, config.train_data_noise)
-                noise = noise_dist.sample(seed=rng, sample_shape=x_batch.shape)
-                x_batch = x_batch + noise
+                x_noise = noise_dist.sample(seed=x_noise_rng, sample_shape=x_batch.shape)
+                y_noise = noise_dist.sample(seed=y_noise_rng, sample_shape=y_batch.shape)
+                x_batch = x_batch + x_noise
+                y_batch = y_batch + y_noise
 
             loss_fn = make_loss_fn(model, x_batch, y_batch, train=True, aggregation='mean', **kwargs)
             grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
