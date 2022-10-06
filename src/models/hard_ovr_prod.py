@@ -29,7 +29,7 @@ def hardened_ovr_ll(y_1hot, logits, T):
 
 
 class Hard_OvR_Ens(nn.Module):
-    """A standard classification ensemble."""
+    """A hard product of one-vs-rest classification ensembles."""
     size: int
     net: KwArgs
     weights_init: Callable = initializers.ones
