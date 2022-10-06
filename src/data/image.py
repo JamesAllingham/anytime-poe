@@ -70,12 +70,6 @@ def get_image_dataset(
 
         test_augmentations: a `list` of augmentations to apply to the test data. (Default: `[]`)
 
-        η_low, η_high: optional `Array`s controlling the affine transformations to apply to the data.
-        To be concrete, these arrays represent the lower and upper bounds of a uniform distribution
-        from which affine transformation parameters are drawn.
-        For more information see `transformations.affine.gen_transform_mat`.
-        (Default: `None`)
-
     Returns:
         `(train_dataset, test_dataset)` if `val_percent` is 0 otherwise `(train_dataset, test_dataset, val_dataset)`
     """
