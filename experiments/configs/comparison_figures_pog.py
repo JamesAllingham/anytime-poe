@@ -12,7 +12,7 @@ def get_config() -> config_dict.ConfigDict:
     config.dataset.noise_std = 0.25
     config.dataset.heteroscedastic = False
 
-    config.train_data_noise = 0.01
+    # config.train_data_noise = 0.01
 
     config.batch_size = 500
     config.epochs = 201
@@ -24,12 +24,12 @@ def get_config() -> config_dict.ConfigDict:
     config.learning_rate = 1e-4
 
     config.β_schedule = config_dict.ConfigDict()
-    config.β_schedule.name = 'linear'
+    config.β_schedule.name = 'sigmoid'
     config.β_schedule.start = 2.
-    config.β_schedule.end = 32.
+    config.β_schedule.end = 16.
     num_train = int(int(config.dataset.n_samples * 0.8) * 0.9)
     num_batches_per_epoch = ceil(num_train / config.batch_size)
-    config.β_schedule.steps = int(config.epochs * num_batches_per_epoch * 0.9)
+    config.β_schedule.steps = config.epochs * num_batches_per_epoch
     # config.β = 1.
 
     config.model_name = 'PoG_Ens'

@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import flax.linen as nn
 from flax.linen import initializers
 from chex import Array, assert_rank, assert_equal_shape
+import distrax
 import matplotlib.pyplot as plt
 
 from src.models.common import get_agg_fn
@@ -50,6 +51,7 @@ class Hard_OvR_Ens(nn.Module):
         y: int,
         train: bool = False,
         β: int = 1,
+        per_member_loss: Optional[float] = None,
     ) -> Array:
         ens_logits = jnp.stack([net(x, train=train) for net in self.nets], axis=0)  # (Μ, Ο)
         probs = nn.softmax(self.weights, axis=0)  # (M,)
@@ -72,7 +74,17 @@ class Hard_OvR_Ens(nn.Module):
         pred = prod_preds.argmax(axis=0)
         err = y != pred
 
-        return nll, err
+        if per_member_loss is None:
+            loss = nll
+        else:
+            def nll_fn(y, logits):
+                return  -1 * distrax.Categorical(logits).log_prob(y)
+
+            nlls = jax.vmap(nll_fn, in_axes=(None, 0))(y, ens_logits)
+
+            loss = (1-per_member_loss)*nll + per_member_loss*jnp.sum(nlls, axis=0)
+
+        return loss, err
 
     def pred(
         self,
@@ -110,13 +122,14 @@ def make_Hard_OvR_Ens_loss(
     β: int,
     train: bool = True,
     aggregation: str = 'mean',
+    per_member_loss: Optional[float] = None,
 ) -> Callable:
     """Creates a loss function for training a Hard One-vs-Rest Ens."""
     def batch_loss(params, state, rng):
         # define loss func for 1 example
         def loss_fn(params, x, y):
             (loss, err), new_state = model.apply(
-                {"params": params, **state}, x, y, train=train, β=β,
+                {"params": params, **state}, x, y, train=train, β=β, per_member_loss=per_member_loss,
                 mutable=list(state.keys()) if train else {},
                 rngs={'dropout': rng},
             )
@@ -175,7 +188,7 @@ def make_Hard_OvR_Ens_toy_plots(
     markers = ['o', 'v', 's', 'P', 'X']
     for i in range(n_class):
         idxs = (y_train == i)
-        axs.plot(X_train[idxs[:, 0], 0], X_train[idxs[:, 0], 1], markers[0], c=f'C{i}', alpha=1, ms=1)
+        axs.plot(X_train[idxs, 0], X_train[idxs, 1], markers[0], c=f'C{i}', alpha=1, ms=1)
 
     plt.show()
 

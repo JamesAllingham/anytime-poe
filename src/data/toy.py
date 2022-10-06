@@ -154,7 +154,7 @@ def gen_spirals(
 
     n_samples = math.floor(n_samples / n_arms)
     x = np.empty((0, 2))
-    y = np.empty((0, 1))
+    y = np.empty((0,))
 
     def _generate_spiral(n_samples, start_angle, stop_angle, angle, noise_std, random_seed=1234):
         # Generate points from the square root of random data inside an uniform distribution on [0, 1).
@@ -179,7 +179,7 @@ def gen_spirals(
 
     for i, angle in enumerate(angles):
         points = _generate_spiral(n_samples, start_angle, stop_angle, angle, noise_std, random_seed=random_seed)
-        labels = np.full((n_samples, 1), i)
+        labels = np.full((n_samples,), i)
         x = np.concatenate((x, points))
         y = np.concatenate((y, labels))
 

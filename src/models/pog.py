@@ -81,7 +81,7 @@ class PoG_Ens(nn.Module):
 
             nlls = jax.vmap(nll_fn, in_axes=(None, 0, 0))(y, locs, scales)
 
-            loss = 0.5*nll + 0.5*jnp.sum(nlls, axis=0)[0]
+            loss = 0.50*nll + 0.50*jnp.sum(nlls, axis=0)[0]
 
         return loss, err
 
@@ -123,10 +123,10 @@ def make_PoG_Ens_loss(
     x_batch: Array,
     y_batch: Array,
     β: int,
-    train: bool = True,
-    per_member_loss: bool = False,
     # ^ controls how much our GND looks like a Guassian (β=2) or Uniform (β->inf)
     # should be taken from 2 to ??? duringn the process of training
+    train: bool = True,
+    per_member_loss: bool = False,
     aggregation: str = 'mean',
 ) -> Callable:
     """Creates a loss function for training a PoE DUN."""
@@ -134,8 +134,7 @@ def make_PoG_Ens_loss(
         # define loss func for 1 example
         def loss_fn(params, x, y):
             (loss, err), new_state = model.apply(
-                {"params": params, **state}, x, y, train=train, β=β,
-                per_member_loss=per_member_loss,
+                {"params": params, **state}, x, y, train=train, β=β, per_member_loss=per_member_loss,
                 mutable=list(state.keys()) if train else {},
             )
 

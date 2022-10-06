@@ -19,7 +19,7 @@ def get_config() -> config_dict.ConfigDict:
     config.dataset.stop_angle = 180
 
     config.batch_size = 256
-    config.epochs = 501
+    config.epochs = 201
 
     # config.train_data_noise = 0.05
 
@@ -47,7 +47,7 @@ def get_config() -> config_dict.ConfigDict:
     config.β_schedule = config_dict.ConfigDict()
     config.β_schedule.name = 'linear'
     config.β_schedule.start = 1.
-    config.β_schedule.end = 1.5
+    config.β_schedule.end = 16.
     # config.β_schedule.steps = int(config.epochs * num_batches_per_epoch * 0.9)
     config.β_schedule.steps = config.epochs * num_batches_per_epoch
     # config.β = 1.

@@ -34,9 +34,9 @@ def get_config() -> config_dict.ConfigDict:
     config.model.learn_weights = False
 
     config.β_schedule = config_dict.ConfigDict()
-    config.β_schedule.name = 'linear'
-    config.β_schedule.start = 1.
-    config.β_schedule.end = 32.
+    config.β_schedule.name = 'sigmoid'
+    config.β_schedule.start = 2.
+    config.β_schedule.end = 16.
     config.β_schedule.steps = config.epochs * num_batches_per_epoch
 
     # config.β = 1.
